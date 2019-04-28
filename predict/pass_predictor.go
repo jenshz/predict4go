@@ -37,68 +37,54 @@
  */
 package predict
 
+import (
+    "math"
+    "errors"
+)
+
+const (
+    UTC = "UTC"
+    SOUTH = "south"
+    NORTH = "north"
+    TWOPI = math.Pi * 2.0
+    DEADSPOT_NONE = "none"
+)
+
+
 /**
  * Class which provides Pass Prediction.
  * 
  * @author David A. B. Johnson, g4dpz
  * 
  */
-// public class PassPredictor {
+type PassPredictor struct {
+    tle TLE
+    qth *GroundStationPosition
+    sat Satellite
+}
 
-// 	private static final String UTC = "UTC";
-// 	private static final String SOUTH = "south";
-// 	private static final String NORTH = "north";
-// 	private static final double SPEED_OF_LIGHT = 2.99792458E8;
-// 	private static final double TWOPI = Math.PI * 2.0;
 
-// 	private static final String DEADSPOT_NONE = "none";
+/**
+ * Constructor.
+ * 
+ * @param tle
+ *            the Three Line Elements
+ * @param qth
+ *            the ground station position
+ */
+func NewPassPredictor(tle TLE, qth GroundStationPosition) (*PassPredictor, error) {
+    result := &PassPredictor{
+        tle: tle,
+        qth: &qth,
+        sat: NewSatellite(&tle),
+    }
 
-// 	/** The time at which we do all the calculations. */
-// 	static final TimeZone TZ = TimeZone.getTimeZone(UTC);
+    if !result.sat.WillBeSeen(result.qth) {
+        return nil, errors.New("Satellite will never appear above the horizon.")
+    }
 
-// 	private static Log log = LogFactory.getLog(PassPredictor.class);
-
-// 	private final TLE tle;
-// 	private final GroundStationPosition qth;
-// 	private final Satellite sat;
-
-// 	private int iterationCount;
-
-// 	/**
-// 	 * Constructor.
-// 	 * 
-// 	 * @param tle
-// 	 *            the Three Line Elements
-// 	 * @param qth
-// 	 *            the ground station position
-// 	 * @throws IllegalArgumentException
-// 	 *             bad argument passed in
-// 	 * @throws SatNotFoundException
-// 	 */
-// 	public PassPredictor(final TLE theTLE, final GroundStationPosition theQTH)
-// 			throws IllegalArgumentException, SatNotFoundException {
-
-// 		if (null == theTLE) {
-// 			throw new IllegalArgumentException("TLE has not been set");
-// 		}
-
-// 		if (null == theQTH) {
-// 			throw new IllegalArgumentException("QTH has not been set");
-// 		}
-
-// 		this.tle = theTLE;
-// 		this.qth = theQTH;
-
-// 		sat = SatelliteFactory.createSatellite(tle);
-
-// 		if (null == sat) {
-// 			throw new SatNotFoundException("Satellite has not been created");
-// 		} else if (!sat.willBeSeen(qth)) {
-// 			throw new SatNotFoundException(
-// 					"Satellite will never appear above the horizon");
-// 		}
-
-// 	}
+    return result, nil
+}
 
 // 	/**
 // 	 * Gets the downlink frequency corrected for doppler.
