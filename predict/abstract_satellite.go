@@ -83,296 +83,6 @@ type AbstractSatellite struct {
 	calculateSDP4orSGP4 func(float64)
 }
 
-func invert(value float64) float64 {
-	return 1.0 / value
-}
-
-/**
- * The function Julian_Date_of_Epoch returns the Julian Date of an epoch
- * specified in the format used in the NORAD two-line element sets. It has
- * been modified to support dates beyond the year 1999 assuming that
- * two-digit years in the range 00-56 correspond to 2000-2056. Until the
- * two-line element set format is changed, it is only valid for dates
- * through 2056 December 31.
- * 
- * @param epoch
- *            the Epoch
- * @return The Julian date of the Epoch
- */
-func julianDateOfEpoch(epoch float64) float64 {
-	/* Modification to support Y2K */
-	/* Valid 1957 through 2056 */
-	year := math.Floor(epoch * 1e-3)
-	day := (epoch * 1e-3 - year) * 1000.0
-
-	if (year < 57) {
-		year += 2000
-	} else {
-		year += 1900
-	}
-
-	return julianDateOfYear(year) + day;
-}
-
-/**
- * Calculates the Julian Day of the Year.
- * 
- * The function Julian_Date_of_Year calculates the Julian Date of Day 0.0 of
- * {year}. This function is used to calculate the Julian Date of any date by
- * using Julian_Date_of_Year, DOY, and Fraction_of_Day.
- * 
- * Astronomical Formulae for Calculators, Jean Meeus, pages 23-25. Calculate
- * Julian Date of 0.0 Jan aYear
- * 
- * @param theYear
- *            the year
- * @return the Julian day number
- */
-func julianDateOfYear(theYear float64) float64 {
-	aYear := theYear - 1
-	i := int64(math.Floor(aYear / 100))
-	a := i
-	i = a / 4
-	b := 2 - a + i
-	i = int64(math.Floor(365.25 * aYear))
-	i += int64(428) //int64(float64(30.6001 * 14))
-
-	return float64(i) + 1720994.5 + float64(b)
-}
-
-var sgp4Epoch = time.Date(1979,12,31,0,0,0,0,time.UTC)
-
-/**
- * Read the system clock and return the number of days since 31Dec79
- * 00:00:00 UTC (daynum 0).
- * 
- * @param date
- *            the date we wan to get the offset for
- * @return the number of days offset
- */
-func calcCurrentDaynum(date time.Time) float64 {
-	now := float64(date.UnixNano()) / 1000000
-	then := float64(sgp4Epoch.UnixNano()) / 1000000
-	millis := now - then
-	return millis / 1000.0 / 60.0 / 60.0 / 24.0
-}
-
-/**
- * Returns the square of a double.
- * 
- * @param arg
- *            the value for which to get the double
- * @return the arg squared
- */
-func sqr(arg float64) float64 {
-	return arg * arg
-}
-
-/**
- * Calculates scalar magnitude of a vector4 argument.
- * 
- * @param v
- *            the vector were measuring
- * 
- */
-func magnitude(v *Vector4) {
-	v.W = math.Sqrt(sqr(v.X) + sqr(v.Y) + sqr(v.Z))
-}
-
-/**
- * Multiplies the vector v1 by the scalar k.
- * 
- * @param k
- *            the multiplier
- * @param v
- *            the vector
- */
-func scaleVector(k float64, v *Vector4) {
-	v.multiply(k)
-	magnitude(v)
-}
-
-
-/**
- * Calculates the dot product of two vectors.
- * 
- * @param v1
- *            vector 1
- * @param v2
- *            vector 2
- * @return the dot product
- */
-
-func dot(v1 *Vector4, v2 *Vector4) float64 {
-	return v1.X * v2.X + v1.Y * v2.Y + v1.Z * v2.Z
-}
-
-
-type Vector4 struct {
-	W float64
-	X float64
-	Y float64
-	Z float64
-}
-
-func (v *Vector4) multiply(multiplier float64) {
-	v.X *= multiplier
-	v.Y *= multiplier
-	v.Z *= multiplier
-}
-
-func (v *Vector4) setXYZ(xValue float64, yValue float64, zValue float64) {
-	v.X = xValue
-	v.Y = yValue
-	v.Z = zValue
-}
-
-func (v *Vector4) subtract(vector *Vector4) *Vector4 {
-	return &Vector4{
-		W: v.W - vector.W,
-		X: v.X - vector.X,
-		Y: v.Y - vector.Y,
-		Z: v.Z - vector.Z,
-	}
-}
-
-func (v *Vector4) scalarMultiply(multiplier float64) *Vector4 {
-	return &Vector4{
-		W: v.W * math.Abs(multiplier),
-		X: v.X * multiplier,
-		Y: v.Y * multiplier,
-		Z: v.Z * multiplier,
-	}
-}
-
-func angle(v1 *Vector4, v2 *Vector4) float64 {
-	magnitude(v1)
-	magnitude(v2)
-	return math.Acos(dot(v1, v2) / (v1.W * v2.W))
-}
-
-func subtract(v1 *Vector4, v2 *Vector4) *Vector4 {
-	v3 := &Vector4{
-		X: v1.X - v2.X,
-		Y: v1.Y - v2.Y,
-		Z: v1.Z - v2.Z,
-	}
-	magnitude(v3)
-	return v3
-}
-
-/**
- * Gets the modulus of a double value.
- * 
- * @param arg1
- *            the value to be tested
- * @param arg2
- *            the divisor
- * @return the remainder
- */
-func modulus(arg1 float64, arg2 float64) float64 {
-	/* Returns arg1 mod arg2 */
-
-	returnValue := arg1
-
-	i := int(math.Floor(returnValue / arg2))
-	returnValue -= float64(i) * arg2
-
-	if (returnValue < 0.0) {
-		returnValue += arg2
-	}
-
-	return returnValue
-}
-
-func frac(arg float64) float64 {
-	/* Returns fractional part of double argument */
-	return arg - math.Floor(arg)
-}
-
-func thetaGJD(theJD float64) float64 {
-	/* Reference: The 1992 Astronomical Almanac, page B6. */
-
-	ut := frac(theJD + 0.5)
-	aJD := theJD - ut
-	tu := (aJD - 2451545.0) / 36525.0
-	gmst := 24110.54841 + tu * (8640184.812866 + tu * (0.093104 - tu * 6.2E-6))
-	gmst = modulus(gmst + SECS_PER_DAY * EARTH_ROTATIONS_PER_SIDERIAL_DAY * ut, SECS_PER_DAY)
-
-	return TWO_PI * gmst / SECS_PER_DAY
-}
-
-/**
- * Calculates the modulus of 2 * PI.
- * 
- * @param testValue
- *            the value under test
- * @return the modulus
- */
-func mod2PI(testValue float64) float64 {
-	/* Returns mod 2PI of argument */
-	retVal := testValue
-	i := int(retVal / TWO_PI)
-	retVal -= float64(i) * TWO_PI
-
-	if (retVal < 0.0) {
-		retVal += TWO_PI
-	}
-
-	return retVal
-}
-
-func calculateLatLonAlt(t float64, satPos *SatPos, position *Vector4) {
-	satPos.Theta = math.Atan2(position.Y, position.X)
-	satPos.Longitude = mod2PI(satPos.Theta - thetaGJD(t))
-	r := math.Sqrt(sqr(position.X) + sqr(position.Y))
-	e2 := FLATTENING_FACTOR * (2.0 - FLATTENING_FACTOR)
-	satPos.Latitude = math.Atan2(position.Z, r)
-
-	var phi float64
-	var c float64
-	i := 0
-	converged := false
-
-	for {
-		phi = satPos.Latitude
-		c = invert(math.Sqrt(1.0 - e2 * sqr(math.Sin(phi))))
-		satPos.Latitude = math.Atan2(position.Z + EARTH_RADIUS_KM * c * e2 * math.Sin(phi), r)
-
-		converged = math.Abs(satPos.Latitude - phi) < EPSILON
-		i += 1
-		if i >= 10 || converged {
-			break
-		}
-	}
-
-	satPos.Altitude = r / math.Cos(satPos.Latitude) - EARTH_RADIUS_KM * c
-
-	temp := satPos.Latitude
-
-	if (temp > PI_OVER_TWO) {
-		temp -= TWO_PI
-		satPos.Latitude = temp
-	}
-}
-
-/**
- * Converts the satellite'S position and velocity vectors from normalized
- * values to km and km/sec.
- * 
- * @param pos
- *            the position
- * @param vel
- *            the velocity
- */
-func convertSatState(pos *Vector4, vel *Vector4) {
-	/* Converts the satellite'S position and velocity */
-	/* vectors from normalized values to km and km/sec */
-	scaleVector(EARTH_RADIUS_KM, pos)
-	scaleVector(EARTH_RADIUS_KM * MINS_PER_DAY / SECS_PER_DAY, vel)
-}
-
-
 func NewAbstractSatellite(tle TLE) (*AbstractSatellite) {
 	return &AbstractSatellite{
 		tle: tle,
@@ -718,6 +428,298 @@ func (a *AbstractSatellite) calculatePositionAndVelocity(rk float64, uk float64,
 		rdotk * uy + rfdotk * vy,
 		rdotk * uz + rfdotk * vz)
 }
+
+
+func invert(value float64) float64 {
+	return 1.0 / value
+}
+
+/**
+ * The function Julian_Date_of_Epoch returns the Julian Date of an epoch
+ * specified in the format used in the NORAD two-line element sets. It has
+ * been modified to support dates beyond the year 1999 assuming that
+ * two-digit years in the range 00-56 correspond to 2000-2056. Until the
+ * two-line element set format is changed, it is only valid for dates
+ * through 2056 December 31.
+ * 
+ * @param epoch
+ *            the Epoch
+ * @return The Julian date of the Epoch
+ */
+func julianDateOfEpoch(epoch float64) float64 {
+	/* Modification to support Y2K */
+	/* Valid 1957 through 2056 */
+	year := math.Floor(epoch * 1e-3)
+	day := (epoch * 1e-3 - year) * 1000.0
+
+	if (year < 57) {
+		year += 2000
+	} else {
+		year += 1900
+	}
+
+	return julianDateOfYear(year) + day;
+}
+
+/**
+ * Calculates the Julian Day of the Year.
+ * 
+ * The function Julian_Date_of_Year calculates the Julian Date of Day 0.0 of
+ * {year}. This function is used to calculate the Julian Date of any date by
+ * using Julian_Date_of_Year, DOY, and Fraction_of_Day.
+ * 
+ * Astronomical Formulae for Calculators, Jean Meeus, pages 23-25. Calculate
+ * Julian Date of 0.0 Jan aYear
+ * 
+ * @param theYear
+ *            the year
+ * @return the Julian day number
+ */
+func julianDateOfYear(theYear float64) float64 {
+	aYear := theYear - 1
+	i := int64(math.Floor(aYear / 100))
+	a := i
+	i = a / 4
+	b := 2 - a + i
+	i = int64(math.Floor(365.25 * aYear))
+	i += int64(428) //int64(float64(30.6001 * 14))
+
+	return float64(i) + 1720994.5 + float64(b)
+}
+
+var sgp4Epoch = time.Date(1979,12,31,0,0,0,0,time.UTC)
+
+/**
+ * Read the system clock and return the number of days since 31Dec79
+ * 00:00:00 UTC (daynum 0).
+ * 
+ * @param date
+ *            the date we wan to get the offset for
+ * @return the number of days offset
+ */
+func calcCurrentDaynum(date time.Time) float64 {
+	now := float64(date.UnixNano()) / 1000000
+	then := float64(sgp4Epoch.UnixNano()) / 1000000
+	millis := now - then
+	return millis / 1000.0 / 60.0 / 60.0 / 24.0
+}
+
+/**
+ * Returns the square of a double.
+ * 
+ * @param arg
+ *            the value for which to get the double
+ * @return the arg squared
+ */
+func sqr(arg float64) float64 {
+	return arg * arg
+}
+
+/**
+ * Calculates scalar magnitude of a vector4 argument.
+ * 
+ * @param v
+ *            the vector were measuring
+ * 
+ */
+func magnitude(v *Vector4) {
+	v.W = math.Sqrt(sqr(v.X) + sqr(v.Y) + sqr(v.Z))
+}
+
+/**
+ * Multiplies the vector v1 by the scalar k.
+ * 
+ * @param k
+ *            the multiplier
+ * @param v
+ *            the vector
+ */
+func scaleVector(k float64, v *Vector4) {
+	v.multiply(k)
+	magnitude(v)
+}
+
+
+/**
+ * Calculates the dot product of two vectors.
+ * 
+ * @param v1
+ *            vector 1
+ * @param v2
+ *            vector 2
+ * @return the dot product
+ */
+
+func dot(v1 *Vector4, v2 *Vector4) float64 {
+	return v1.X * v2.X + v1.Y * v2.Y + v1.Z * v2.Z
+}
+
+
+type Vector4 struct {
+	W float64
+	X float64
+	Y float64
+	Z float64
+}
+
+func (v *Vector4) multiply(multiplier float64) {
+	v.X *= multiplier
+	v.Y *= multiplier
+	v.Z *= multiplier
+}
+
+func (v *Vector4) setXYZ(xValue float64, yValue float64, zValue float64) {
+	v.X = xValue
+	v.Y = yValue
+	v.Z = zValue
+}
+
+func (v *Vector4) subtract(vector *Vector4) *Vector4 {
+	return &Vector4{
+		W: v.W - vector.W,
+		X: v.X - vector.X,
+		Y: v.Y - vector.Y,
+		Z: v.Z - vector.Z,
+	}
+}
+
+func (v *Vector4) scalarMultiply(multiplier float64) *Vector4 {
+	return &Vector4{
+		W: v.W * math.Abs(multiplier),
+		X: v.X * multiplier,
+		Y: v.Y * multiplier,
+		Z: v.Z * multiplier,
+	}
+}
+
+func angle(v1 *Vector4, v2 *Vector4) float64 {
+	magnitude(v1)
+	magnitude(v2)
+	return math.Acos(dot(v1, v2) / (v1.W * v2.W))
+}
+
+func subtract(v1 *Vector4, v2 *Vector4) *Vector4 {
+	v3 := &Vector4{
+		X: v1.X - v2.X,
+		Y: v1.Y - v2.Y,
+		Z: v1.Z - v2.Z,
+	}
+	magnitude(v3)
+	return v3
+}
+
+/**
+ * Gets the modulus of a double value.
+ * 
+ * @param arg1
+ *            the value to be tested
+ * @param arg2
+ *            the divisor
+ * @return the remainder
+ */
+func modulus(arg1 float64, arg2 float64) float64 {
+	/* Returns arg1 mod arg2 */
+
+	returnValue := arg1
+
+	i := int(math.Floor(returnValue / arg2))
+	returnValue -= float64(i) * arg2
+
+	if (returnValue < 0.0) {
+		returnValue += arg2
+	}
+
+	return returnValue
+}
+
+func frac(arg float64) float64 {
+	/* Returns fractional part of double argument */
+	return arg - math.Floor(arg)
+}
+
+func thetaGJD(theJD float64) float64 {
+	/* Reference: The 1992 Astronomical Almanac, page B6. */
+
+	ut := frac(theJD + 0.5)
+	aJD := theJD - ut
+	tu := (aJD - 2451545.0) / 36525.0
+	gmst := 24110.54841 + tu * (8640184.812866 + tu * (0.093104 - tu * 6.2E-6))
+	gmst = modulus(gmst + SECS_PER_DAY * EARTH_ROTATIONS_PER_SIDERIAL_DAY * ut, SECS_PER_DAY)
+
+	return TWO_PI * gmst / SECS_PER_DAY
+}
+
+/**
+ * Calculates the modulus of 2 * PI.
+ * 
+ * @param testValue
+ *            the value under test
+ * @return the modulus
+ */
+func mod2PI(testValue float64) float64 {
+	/* Returns mod 2PI of argument */
+	retVal := testValue
+	i := int(retVal / TWO_PI)
+	retVal -= float64(i) * TWO_PI
+
+	if (retVal < 0.0) {
+		retVal += TWO_PI
+	}
+
+	return retVal
+}
+
+func calculateLatLonAlt(t float64, satPos *SatPos, position *Vector4) {
+	satPos.Theta = math.Atan2(position.Y, position.X)
+	satPos.Longitude = mod2PI(satPos.Theta - thetaGJD(t))
+	r := math.Sqrt(sqr(position.X) + sqr(position.Y))
+	e2 := FLATTENING_FACTOR * (2.0 - FLATTENING_FACTOR)
+	satPos.Latitude = math.Atan2(position.Z, r)
+
+	var phi float64
+	var c float64
+	i := 0
+	converged := false
+
+	for {
+		phi = satPos.Latitude
+		c = invert(math.Sqrt(1.0 - e2 * sqr(math.Sin(phi))))
+		satPos.Latitude = math.Atan2(position.Z + EARTH_RADIUS_KM * c * e2 * math.Sin(phi), r)
+
+		converged = math.Abs(satPos.Latitude - phi) < EPSILON
+		i += 1
+		if i >= 10 || converged {
+			break
+		}
+	}
+
+	satPos.Altitude = r / math.Cos(satPos.Latitude) - EARTH_RADIUS_KM * c
+
+	temp := satPos.Latitude
+
+	if (temp > PI_OVER_TWO) {
+		temp -= TWO_PI
+		satPos.Latitude = temp
+	}
+}
+
+/**
+ * Converts the satellite'S position and velocity vectors from normalized
+ * values to km and km/sec.
+ * 
+ * @param pos
+ *            the position
+ * @param vel
+ *            the velocity
+ */
+func convertSatState(pos *Vector4, vel *Vector4) {
+	/* Converts the satellite'S position and velocity */
+	/* vectors from normalized values to km and km/sec */
+	scaleVector(EARTH_RADIUS_KM, pos)
+	scaleVector(EARTH_RADIUS_KM * MINS_PER_DAY / SECS_PER_DAY, vel)
+}
+
+
 
 /**
  * The function Delta_ET has been added to allow calculations on the
