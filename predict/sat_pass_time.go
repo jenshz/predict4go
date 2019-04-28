@@ -53,11 +53,11 @@ type SatPassTime struct {
 	MaxEl float64
 }
 
-func NewSatPassTime(startTime time.Time, endTime time.Time, polePassed string, aos int, los int, maxEl float64) (*SatPassTime) {
+func NewSatPassTime(startTime time.Time, endTime time.Time, tca time.Time, polePassed string, aos int, los int, maxEl float64) (*SatPassTime) {
 	return &SatPassTime{
 		StartTime: startTime,
 		EndTime: endTime,
-		Tca: time.Unix((startTime.Unix() + endTime.Unix()) / 2, 0),
+		Tca: tca, //time.Unix((startTime.Unix() + endTime.Unix()) / 2, 0),
 		PolePassed: polePassed,
 		Aos: aos,
 		Los: los,

@@ -40,6 +40,7 @@ package predict
 import (
     "math"
     "errors"
+    "time"
 )
 
 const (
@@ -58,9 +59,10 @@ const (
  * 
  */
 type PassPredictor struct {
-    tle TLE
+    tle *TLE
     qth *GroundStationPosition
     sat Satellite
+    iterationCount int
 }
 
 
@@ -72,11 +74,11 @@ type PassPredictor struct {
  * @param qth
  *            the ground station position
  */
-func NewPassPredictor(tle TLE, qth GroundStationPosition) (*PassPredictor, error) {
+func NewPassPredictor(tle *TLE, qth *GroundStationPosition) (*PassPredictor, error) {
     result := &PassPredictor{
         tle: tle,
-        qth: &qth,
-        sat: NewSatellite(&tle),
+        qth: qth,
+        sat: NewSatellite(tle),
     }
 
     if !result.sat.WillBeSeen(result.qth) {
@@ -86,211 +88,180 @@ func NewPassPredictor(tle TLE, qth GroundStationPosition) (*PassPredictor, error
     return result, nil
 }
 
-// 	/**
-// 	 * Gets the downlink frequency corrected for doppler.
-// 	 * 
-// 	 * @param freq
-// 	 *            the original frequency in Hz
-// 	 * @return the doppler corrected frequency in Hz
-// 	 * @throws InvalidTleException
-// 	 *             bad TLE passed in
-// 	 * @throws SatNotFoundException
-// 	 */
-// 	public Long getDownlinkFreq(final Long freq, final Date date)
-// 			throws SatNotFoundException {
-// 		// get the current position
-// 		final Calendar cal = Calendar.getInstance(TZ);
-// 		cal.clear();
-// 		cal.setTimeInMillis(date.getTime());
-// 		final SatPos satPos = getSatPos(cal.getTime());
-// 		final double rangeRate = satPos.getRangeRate();
-// 		return (long) ((double) freq * (SPEED_OF_LIGHT - rangeRate * 1000.0) / SPEED_OF_LIGHT);
-// 	}
+/**
+ * Gets the downlink frequency corrected for doppler.
+ * 
+ * @param freq
+ *            the original frequency in Hz
+ * @return the doppler corrected frequency in Hz
+ * @throws InvalidTleException
+ *             bad TLE passed in
+ * @throws SatNotFoundException
+ */
+func (p *PassPredictor) GetDownlinkFreq(freq float64, t time.Time) int64 {
+	// get the current position
+	satPos := p.getSatPos(t)
+	rangeRate := satPos.RangeRate
+	return int64(float64(freq * (SPEED_OF_LIGHT - rangeRate * 1000.0) / SPEED_OF_LIGHT))
+}
 
-// 	public SatPos getSatPos(final Date time) throws SatNotFoundException {
-// 		this.iterationCount++;
-// 		return sat.getPosition(qth, time);
-// 	}
+func (p *PassPredictor) GetUplinkFreq(freq float64, t time.Time) int64 {
+	satPos := p.getSatPos(t)
+	rangeRate := satPos.RangeRate
+	return int64(freq * (SPEED_OF_LIGHT + rangeRate * 1000.0) / SPEED_OF_LIGHT)
+}
 
-// 	public Long getUplinkFreq(final Long freq, final Date date)
-// 			throws SatNotFoundException {
-// 		final Calendar cal = Calendar.getInstance(TZ);
-// 		cal.clear();
-// 		cal.setTimeInMillis(date.getTime());
-// 		final SatPos satPos = getSatPos(cal.getTime());
-// 		final double rangeRate = satPos.getRangeRate();
-// 		return (long) ((double) freq * (SPEED_OF_LIGHT + rangeRate * 1000.0) / SPEED_OF_LIGHT);
-// 	}
+func (p *PassPredictor) getSatPos(t time.Time) SatPos {
+    p.iterationCount += 1
+    return p.sat.GetPosition(p.qth, t)
+}
 
-// 	public SatPassTime nextSatPass(final Date date) throws SatNotFoundException {
-// 		return nextSatPass(date, false);
-// 	}
+func (p *PassPredictor) nextSatPass(t time.Time, targetElevation float64) *SatPassTime {
+	return p.nextSatPassInternal(t, false, targetElevation)
+}
 
-// 	public SatPassTime nextSatPass(final Date date, final boolean windBack)
-// 			throws SatNotFoundException {
+func (p *PassPredictor) nextSatPassInternal(t time.Time, windBack bool, targetElevation float64) *SatPassTime {
+    aosAzimuth := 0
+    losAzimuth := 0
+    maxElevation := 0.0
 
-// 		int aosAzimuth = 0;
-// 		int losAzimuth = 0;
-// 		double maxElevation = 0;
-// 		double elevation = 0;
+    polePassed := DEADSPOT_NONE
 
-// 		String polePassed = DEADSPOT_NONE;
+    cal := t
+    stopSearch := cal.Add(time.Duration(24) * time.Hour)
 
-// 		// get the current position
-// 		final Calendar cal = Calendar.getInstance(TZ);
-// 		cal.clear();
-// 		cal.setTimeInMillis(date.getTime());
+    // wind back time 1/4 of an orbit
+    if (windBack) {
+        cal = cal.Add(time.Minute * time.Duration(int(-24.0 * 60.0 / p.tle.Meanmo / 4.0)))
+    }
 
-// 		// wind back time 1/4 of an orbit
-// 		if (windBack) {
-// 			double meanMotion = tle.getMeanmo();
-// 			cal.add(Calendar.MINUTE, (int) (-24.0 * 60.0 / meanMotion / 4.0));
-// 		}
+    satPos := p.getSatPos(cal)
+    prevPos := satPos
 
-// 		SatPos satPos = getSatPos(cal.getTime());
-// 		SatPos prevPos = satPos;
+    // test for the elevation being above the horizon
+    if (satPos.Elevation > targetElevation) {
+        // move time forward in 30 second intervals until the sat goes below
+        // the horizon
+        for {
+            cal, satPos = p.getPosition(cal, 60)
+            if satPos.Elevation >= targetElevation {
+                break
+            }
+            if !cal.Before(stopSearch) {
+                return nil
+            }
+        }
 
-// 		// test for the elevation being above the horizon
-// 		if (satPos.getElevation() > 0.0) {
+        // move time forward 3/4 orbit
+        cal = cal.Add(time.Minute * time.Duration(p.threeQuarterOrbitMinutes()))
+    }
 
-// 			// move time forward in 30 second intervals until the sat goes below
-// 			// the horizon
-// 			do {
-// 				satPos = getPosition(cal, 60);
-// 			} while (satPos.getElevation() > 0.0);
+    var tca time.Time
 
-// 			// move time forward 3/4 orbit
-// 			cal.add(Calendar.MINUTE, threeQuarterOrbitMinutes());
-// 		}
+    // now find the next time it comes above the horizon
+    findCrossing := func(jump int, aos bool, checkPolePassed bool) bool {
+        for {
+            cal, satPos = p.getPosition(cal, jump)
 
-// 		Date tca = null;
+            if checkPolePassed {
+                currPolePassed := p.getPolePassed(prevPos, satPos)
+                if (currPolePassed != DEADSPOT_NONE) {
+                    polePassed = currPolePassed
+                }
+            }
 
-// 		// now find the next time it comes above the horizon
-// 		do {
-// 			satPos = getPosition(cal, 60);
-// 			final Date now = cal.getTime();
-// 			elevation = satPos.getElevation();
-// 			if (elevation > maxElevation) {
-// 				maxElevation = elevation;
-// 				tca = now;
-// 			}
-// 		} while (satPos.getElevation() < 0.0);
+            if (satPos.Elevation > maxElevation) {
+                maxElevation = satPos.Elevation
+                tca = cal
+            }
+            prevPos = satPos
 
-// 		// refine it to 5 seconds
-// 		cal.add(Calendar.SECOND, -60);
-// 		do {
-// 			satPos = getPosition(cal, 5);
-// 			final Date now = cal.getTime();
-// 			elevation = satPos.getElevation();
-// 			if (elevation > maxElevation) {
-// 				maxElevation = elevation;
-// 				tca = now;
-// 			}
-// 			prevPos = satPos;
-// 		} while (satPos.getElevation() < 0.0);
+            if satPos.Elevation >= targetElevation && aos {
+                break // aos
+            } else if satPos.Elevation <= targetElevation && !aos {
+                break // los
+            }
+            if !cal.Before(stopSearch) {
+                return false
+            }
+        }
+        return true
+    }
 
-// 		final Date startDate = satPos.getTime();
+    if !findCrossing(60, true, false) {
+        return nil
+    }
 
-// 		aosAzimuth = (int) ((satPos.getAzimuth() / (2.0 * Math.PI)) * 360.0);
+    // refine it to 1 seconds
+    cal = cal.Add(time.Second * time.Duration(-60))
+    if !findCrossing(1, true, false) {
+        return nil
+    }
 
-// 		// now find when it goes below
-// 		do {
-// 			satPos = getPosition(cal, 30);
-// 			final Date now = cal.getTime();
-// 			final String currPolePassed = getPolePassed(prevPos, satPos);
-// 			if (!currPolePassed.equals(DEADSPOT_NONE)) {
-// 				polePassed = currPolePassed;
-// 			}
-// 			log.debug("Current pole passed: " + polePassed);
-// 			elevation = satPos.getElevation();
-// 			if (elevation > maxElevation) {
-// 				maxElevation = elevation;
-// 				tca = now;
-// 			}
-// 			prevPos = satPos;
-// 		} while (satPos.getElevation() > 0.0);
+    startDate := satPos.Time
 
-// 		// refine it to 5 seconds
-// 		cal.add(Calendar.SECOND, -30);
-// 		do {
-// 			satPos = getPosition(cal, 5);
-// 			final Date now = cal.getTime();
-// 			elevation = satPos.getElevation();
-// 			if (elevation > maxElevation) {
-// 				maxElevation = elevation;
-// 				tca = now;
-// 			}
-// 		} while (satPos.getElevation() > 0.0);
+    aosAzimuth = int((satPos.Azimuth / (2.0 * math.Pi)) * 360.0)
 
-// 		final Date endDate = satPos.getTime();
-// 		losAzimuth = (int) ((satPos.getAzimuth() / (2.0 * Math.PI)) * 360.0);
+    // now find when it goes below
+    if !findCrossing(30, false, true) {
+        return nil
+    }
 
-// 		return new SatPassTime(startDate, endDate, tca, polePassed, aosAzimuth,
-// 				losAzimuth, (maxElevation / (2.0 * Math.PI)) * 360.0);
+    // refine it to 1 seconds
+    cal = cal.Add(time.Second * time.Duration(-30))
+    if !findCrossing(1, false, false) {
+        return nil
+    }
 
-// 	}
+    endDate := satPos.Time
+    losAzimuth = int((satPos.Azimuth / (2.0 * math.Pi)) * 360.0)
 
-// 	/**
-// 	 * @param cal
-// 	 * @param offSet
-// 	 * @return
-// 	 * @throws InvalidTleException
-// 	 * @throws SatNotFoundException
-// 	 */
-// 	private SatPos getPosition(final Calendar cal, final int offSet)
-// 			throws SatNotFoundException {
-// 		SatPos satPos;
-// 		cal.add(Calendar.SECOND, offSet);
-// 		satPos = getSatPos(cal.getTime());
-// 		return satPos;
-// 	}
+    return NewSatPassTime(startDate, endDate, tca, polePassed, aosAzimuth, losAzimuth, (maxElevation / (2.0 * math.Pi)) * 360.0)
 
-// 	/**
-// 	 * Gets a list of SatPassTime
-// 	 * 
-// 	 * @param start
-// 	 *            Date
-// 	 * 
-// 	 *            newTLE = true; validateData();
-// 	 * @param end
-// 	 *            Date
-// 	 * @param firstAosLimit
-// 	 *            in hours
-// 	 * @return List<SatPassTime>
-// 	 * @throws SatNotFoundException
-// 	 * @throws InvalidTleException
-// 	 */
-// 	public List<SatPassTime> getPasses(final Date start, final int hoursAhead,
-// 			final boolean windBack) throws SatNotFoundException {
+}
 
-// 		this.iterationCount = 0;
+func (p *PassPredictor) getPosition(t time.Time, offset int) (time.Time, SatPos) {
+    t = t.Add(time.Second * time.Duration(offset))
+	return t, p.getSatPos(t)
+}
 
-// 		boolean windBackTime = windBack;
+/**
+ * Gets a list of SatPassTime
+ */
+func (p *PassPredictor) GetPasses(start time.Time, hoursAhead int, windBack bool, targetElevation float64) []*SatPassTime {
+	p.iterationCount = 0
+	windBackTime := windBack
 
-// 		final List<SatPassTime> passes = new ArrayList<SatPassTime>();
+	var passes []*SatPassTime
 
-// 		Date trackStartDate = start;
-// 		final Date trackEndDate = new Date(start.getTime()
-// 				+ (hoursAhead * 60L * 60L * 1000L));
+    trackStartTime := start
+    trackEndTime := start.Add(time.Duration(hoursAhead) * time.Hour)
 
-// 		Date lastAOS;
+	var lastAOS time.Time
 
-// 		int count = 0;
+	count := 0
 
-// 		do {
-// 			if (count > 0) {
-// 				windBackTime = false;
-// 			}
-// 			final SatPassTime pass = nextSatPass(trackStartDate, windBackTime);
-// 			lastAOS = pass.getStartTime();
-// 			passes.add(pass);
-// 			trackStartDate = new Date(pass.getEndTime().getTime()
-// 					+ (threeQuarterOrbitMinutes() * 60L * 1000L));
-// 			count++;
-// 		} while (lastAOS.compareTo(trackEndDate) < 0);
+	for lastAOS.Before(trackEndTime) {
+		if (count > 0) {
+			windBackTime = false
+		}
 
-// 		return passes;
-// 	}
+		pass := p.nextSatPassInternal(trackStartTime, windBackTime, DEG2RAD * targetElevation)
+        if pass == nil {
+            break
+        }
+
+		lastAOS = pass.StartTime
+
+		passes = append(passes, pass)
+
+		trackStartTime = pass.EndTime.Add(time.Duration(p.threeQuarterOrbitMinutes()) * time.Minute)
+
+		count += 1
+	}
+
+	return passes;
+}
 
 // 	/**
 // 	 * Returns the iterationCount. @VisibleForTesting
@@ -301,75 +272,58 @@ func NewPassPredictor(tle TLE, qth GroundStationPosition) (*PassPredictor, error
 // 		return iterationCount;
 // 	}
 
-// 	/**
-// 	 * @return time in mS for 3/4 of an orbit
-// 	 */
-// 	private int threeQuarterOrbitMinutes() {
-// 		return (int) (24.0 * 60.0 / tle.getMeanmo() * 0.75);
-// 	}
+/**
+ * @return time in mS for 3/4 of an orbit
+ */
+func (s *PassPredictor) threeQuarterOrbitMinutes() int {
+	return (int) (24.0 * 60.0 / s.tle.Meanmo * 0.75)
+}
 
-// 	private String getPolePassed(final SatPos prevPos, final SatPos satPos) {
-// 		String polePassed = DEADSPOT_NONE;
+func (s *PassPredictor) getPolePassed(prevPos SatPos, satPos SatPos) string {
+	polePassed := DEADSPOT_NONE
 
-// 		final double az1 = prevPos.getAzimuth() / TWOPI * 360.0;
-// 		final double az2 = satPos.getAzimuth() / TWOPI * 360.0;
+	az1 := prevPos.Azimuth / TWOPI * 360.0
+	az2 := satPos.Azimuth / TWOPI * 360.0
 
-// 		if (az1 > az2) {
-// 			// we may be moving from 350 or greateer thru north
-// 			if (az1 > 350 && az2 < 10) {
-// 				polePassed = NORTH;
-// 			} else {
-// 				// we may be moving from 190 or greateer thru south
-// 				if (az1 > 180 && az2 < 180) {
-// 					polePassed = SOUTH;
-// 				}
-// 			}
-// 		} else {
-// 			// we may be moving from 10 or less through north
-// 			if (az1 < 10 && az2 > 350) {
-// 				polePassed = NORTH;
-// 			} else {
-// 				// we may be moving from 170 or more through south
-// 				if (az1 < 180 && az2 > 180) {
-// 					polePassed = SOUTH;
-// 				}
-// 			}
-// 		}
+	if (az1 > az2) {
+		// we may be moving from 350 or greateer thru north
+		if (az1 > 350 && az2 < 10) {
+			polePassed = NORTH
+		} else {
+			// we may be moving from 190 or greateer thru south
+			if (az1 > 180 && az2 < 180) {
+				polePassed = SOUTH
+			}
+		}
+	} else {
+		// we may be moving from 10 or less through north
+		if (az1 < 10 && az2 > 350) {
+			polePassed = NORTH
+		} else {
+			// we may be moving from 170 or more through south
+			if (az1 < 180 && az2 > 180) {
+				polePassed = SOUTH
+			}
+		}
+	}
 
-// 		return polePassed;
-// 	}
+	return polePassed
+}
 
-// 	/**
-// 	 * Calculates positions of satellite for a given point in time, time range
-// 	 * and step increment.
-// 	 * 
-// 	 * @param referenceDate
-// 	 * @param incrementSeconds
-// 	 * @param minutesBefore
-// 	 * @param minutesAfter
-// 	 * @return list of SatPos
-// 	 * @throws SatNotFoundException
-// 	 * @throws InvalidTleException
-// 	 */
-// 	public List<SatPos> getPositions(final Date referenceDate,
-// 			final int incrementSeconds, final int minutesBefore,
-// 			final int minutesAfter) throws SatNotFoundException {
+/**
+ * Calculates positions of satellite for a given point in time, time range
+ * and step increment.
+ */
+func (p *PassPredictor) GetPositions(t time.Time, incrementSeconds int, minutesBefore int, minutesAfter int) []SatPos {
+    trackTime := t.Add(-(time.Duration(minutesBefore) * time.Minute))
+    endTime := t.Add(time.Duration(minutesAfter) * time.Minute)
 
-// 		Date trackDate = new Date(referenceDate.getTime()
-// 				- (minutesBefore * 60L * 1000L));
-// 		final Date endDateDate = new Date(referenceDate.getTime()
-// 				+ (minutesAfter * 60L * 1000L));
+    var positions []SatPos
 
-// 		final List<SatPos> positions = new ArrayList<SatPos>();
+    for trackTime.Before(endTime) {
+        positions = append(positions, p.getSatPos(trackTime))
+        trackTime = trackTime.Add(time.Duration(incrementSeconds) * time.Second)
+    }
 
-// 		while (trackDate.before(endDateDate)) {
-
-// 			positions.add(getSatPos(trackDate));
-
-// 			trackDate = new Date(trackDate.getTime()
-// 					+ (incrementSeconds * 1000));
-// 		}
-
-// 		return positions;
-// 	}
-// }
+	return positions
+}
