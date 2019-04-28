@@ -4,7 +4,7 @@ import (
 	"./predict"
 	"fmt"
 	"time"
-	_ "math"
+	"math"
 )
 
 func main() {
@@ -14,14 +14,16 @@ func main() {
 		"2 43744  97.4641 185.2907 0018688 163.4737 196.7173 15.26755683 22421",
 	})
 
+	fmt.Println(hiber1_tle)
+
 	hiber1 := predict.NewSatellite(hiber1_tle)
 
 	tstart := time.Now()
 
-	for i := 0; i < 60; i++ {
-		hiber1.CalculateSatelliteVectors(tstart.Add(time.Duration(i) * time.Minute))
-		pos := hiber1.CalculateSatelliteGroundTrack()
-		fmt.Println(pos.String())
-		//fmt.Printf("%f,%f,%d,#0000%02x\n", pos.Latitude / (math.Pi * 2.0) * 360, pos.Longitude / (math.Pi * 2.0) * 360, i, i)
-	}
+	fmt.Println(tstart, tstart.Unix())
+
+	hiber1.CalculateSatelliteVectors(tstart)
+	pos := hiber1.CalculateSatelliteGroundTrack()
+	fmt.Println(pos.String())
+	fmt.Printf("%f,%f\n", pos.Latitude / (math.Pi * 2.0) * 360, math.Mod(pos.Longitude / (math.Pi * 2.0) * 360 + 180, 360.0) - 180)
 }

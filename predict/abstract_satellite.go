@@ -130,15 +130,17 @@ func julianDateOfEpoch(epoch float64) float64 {
  */
 func julianDateOfYear(theYear float64) float64 {
 	aYear := theYear - 1
-	i := float64(math.Floor(aYear / 100))
+	i := int64(math.Floor(aYear / 100))
 	a := i
 	i = a / 4
 	b := 2 - a + i
-	i = float64(math.Floor(365.25 * aYear))
-	i += 30.6001 * 14
+	i = int64(math.Floor(365.25 * aYear))
+	i += int64(428) //int64(float64(30.6001 * 14))
 
-	return i + 1720994.5 + b
+	return float64(i) + 1720994.5 + float64(b)
 }
+
+var sgp4Epoch = time.Date(1979,12,31,0,0,0,0,time.UTC)
 
 /**
  * Read the system clock and return the number of days since 31Dec79
@@ -150,7 +152,6 @@ func julianDateOfYear(theYear float64) float64 {
  */
 func calcCurrentDaynum(date time.Time) float64 {
 	now := float64(date.UnixNano()) / 1000000
-	sgp4Epoch, _ := time.Parse("2006-01-02T15:04:05-0700", "1979-11-31T00:00:00+0000")
 	then := float64(sgp4Epoch.UnixNano()) / 1000000
 	millis := now - then
 	return millis / 1000.0 / 60.0 / 60.0 / 24.0
@@ -537,7 +538,7 @@ func (a *AbstractSatellite) calculateObs(julianUTC float64, positionVector *Vect
 	elevation := (a.satPos.Elevation / TWO_PI) * 360.0
 
 	if (elevation > 90) {
-		elevation = 180 - elevation;
+		elevation = 180 - elevation
 	}
 
 	a.satPos.AboveHorizon = (elevation - float64(gsPos.HorizonElevations[sector])) > EPSILON
