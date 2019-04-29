@@ -232,8 +232,8 @@ func (p *PassPredictor) GetPasses(start time.Time, hoursAhead int, windBack bool
 
 	var passes []*SatPassTime
 
-	trackStartTime := start
-	trackEndTime := start.Add(time.Duration(hoursAhead) * time.Hour)
+	trackStartTime := start.Truncate(time.Second)
+	trackEndTime := trackStartTime.Add(time.Duration(hoursAhead) * time.Hour)
 
 	var lastAOS time.Time
 
