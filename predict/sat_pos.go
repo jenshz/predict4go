@@ -127,7 +127,7 @@ func (s *SatPos) ToShortString() string {
  * @param incrementDegrees
  * @return
  */
-func (s *SatPos) getRangeCircle(incrementDegrees float64) []Position {
+func (s *SatPos) getRangeCircleWithIncrement(incrementDegrees float64) []Position {
 	return calculateRangeCirclePoints(s, incrementDegrees)
 }
 
@@ -137,8 +137,8 @@ func (s *SatPos) getRangeCircle(incrementDegrees float64) []Position {
  * @param pos
  * @return a list of {@link Position}
  */
-func (s *SatPos) getRangeCircleWithIncrement() []Position {
-	return s.getRangeCircle(1.0)
+func (s *SatPos) GetRangeCircle() []Position {
+	return s.getRangeCircleWithIncrement(1.0)
 }
 
 func (s *SatPos) getRangeCircleRadiusKm() float64 {
