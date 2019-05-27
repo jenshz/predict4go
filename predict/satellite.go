@@ -118,10 +118,6 @@ type Satellite interface {
 	 *            the date
 	 */
 	GetPosition(qth *GroundStationPosition, time time.Time) SatPos
-
-	// CalculateSatelliteVectorsAndReturnPosition updates the satellite
-	// position and returns the current position in the reference coordinate system.
-	CalculateSatelliteVectorsAndReturnPosition(time time.Time) SatPos
 }
 
 func NewSatellite(tle *TLE) Satellite {
