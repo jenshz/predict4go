@@ -327,6 +327,11 @@ func (a *AbstractSatellite) CalculateSatelliteVectors(t time.Time) {
 	a.satPos.Time = t
 }
 
+func (a *AbstractSatellite) CalculateSatelliteVectorsAndReturnPosition(t time.Time) SatPos {
+	a.CalculateSatelliteVectors(t)
+	return a.satPos
+}
+
 func (a *AbstractSatellite) CalculateSatelliteGroundTrack() SatPos {
 	a.calculateLatLonAltFromTime(a.julUTC)
 
