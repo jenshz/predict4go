@@ -69,7 +69,8 @@ func NewSatPassTime(startTime time.Time, endTime time.Time, polePassed string, a
  * Returns a string representing the contents of the object.
  */
 func (s *SatPassTime) String() string {
-	duration := float64(s.EndTime.Unix() - s.StartTime.Unix()) / 60000.0
+	// Get duration in decimal minutes.
+	duration := float64(s.EndTime.Sub(s.StartTime) / time.Second) / 60.0
 
 	return "Date: " + s.StartTime.String() + "\n" + 
 			"Start Time: " + s.StartTime.String() + "\n" +
