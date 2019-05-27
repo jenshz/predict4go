@@ -1,8 +1,8 @@
 package predict
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 )
 
 func TestNewTLE(t *testing.T) {
