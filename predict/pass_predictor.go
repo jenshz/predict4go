@@ -239,14 +239,14 @@ func (p *PassPredictor) GetPasses(start time.Time, hoursAhead int, windBack bool
 
 	count := 0
 
-	for lastAOS.Before(trackEndTime) {
+	for lastAOS.Before(trackEndTime) && trackStartTime.Before(trackEndTime) {
 		if count > 0 {
 			windBackTime = false
 		}
 
 		pass := p.nextSatPassInternal(trackStartTime, windBackTime, DEG2RAD*targetElevation)
 		if pass == nil {
-			pass = trackStartTime.Add(24 * time.Hours)
+			trackStartTime = trackStartTime.Add(24 * time.Hours)
 			continue
 		}
 
