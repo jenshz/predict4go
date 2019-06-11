@@ -246,7 +246,7 @@ func (p *PassPredictor) GetPasses(start time.Time, hoursAhead int, windBack bool
 
 		pass := p.nextSatPassInternal(trackStartTime, windBackTime, DEG2RAD*targetElevation)
 		if pass == nil {
-			trackStartTime = trackStartTime.Add(24 * time.Hours)
+			trackStartTime = trackStartTime.Add(24 * time.Hour)
 			continue
 		}
 
