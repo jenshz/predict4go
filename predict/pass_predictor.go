@@ -186,7 +186,7 @@ func (p *PassPredictor) nextSatPassInternal(t time.Time, windBack bool, targetEl
 		return true
 	}
 
-	if !findCrossing(60, true, false) {
+	if !findCrossing(10, true, false) {
 		return nil
 	}
 
@@ -201,7 +201,7 @@ func (p *PassPredictor) nextSatPassInternal(t time.Time, windBack bool, targetEl
 	aosAzimuth = int((satPos.Azimuth / (2.0 * math.Pi)) * 360.0)
 
 	// now find when it goes below
-	if !findCrossing(30, false, true) {
+	if !findCrossing(10, false, true) {
 		return nil
 	}
 
