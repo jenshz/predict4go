@@ -223,28 +223,22 @@ func (p *PassPredictor) getPosition(t time.Time, offset int) (time.Time, SatPos)
 	return t, p.getSatPos(t)
 }
 
-/**
- * Gets a list of SatPassTime
- */
+// GetPasses calculates a slice of SatPassTime; if windBack is true then passes can be fully or partially in the past.
 func (p *PassPredictor) GetPasses(start time.Time, hoursAhead int, windBack bool, targetElevation float64) []*SatPassTime {
 	p.iterationCount = 0
-	windBackTime := windBack
-
-	var passes []*SatPassTime
 
 	trackStartTime := start.Truncate(time.Second)
 	trackEndTime := trackStartTime.Add(time.Duration(hoursAhead) * time.Hour)
 
 	var lastAOS time.Time
 
-	count := 0
-
+	var passes []*SatPassTime
 	for lastAOS.Before(trackEndTime) && trackStartTime.Before(trackEndTime) {
-		if count > 0 {
-			windBackTime = false
+		if len(passes) > 0 {
+			windBack = false
 		}
 
-		pass := p.nextSatPassInternal(trackStartTime, windBackTime, DEG2RAD*targetElevation)
+		pass := p.nextSatPassInternal(trackStartTime, windBack, DEG2RAD*targetElevation)
 		if pass == nil {
 			trackStartTime = trackStartTime.Add(24 * time.Hour)
 			continue
@@ -255,8 +249,6 @@ func (p *PassPredictor) GetPasses(start time.Time, hoursAhead int, windBack bool
 		passes = append(passes, pass)
 
 		trackStartTime = pass.EndTime.Add(time.Duration(p.threeQuarterOrbitMinutes()) * time.Minute)
-
-		count += 1
 	}
 
 	return passes
