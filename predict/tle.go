@@ -1,4 +1,5 @@
-/**
+/*
+*
 predict4java: An SDP4 / SGP4 library for satellite orbit predictions
 
 Copyright (C)  2004-2010  David A. B. Johnson, G4DPZ.
@@ -46,7 +47,7 @@ import (
 
 const (
 	THREELINES  = 3
-	MINS_PERDAY = 1.44E3
+	MINS_PERDAY = 1.44e3
 )
 
 /**
@@ -78,6 +79,10 @@ type TLE struct {
 	Xmo       float64
 	Xno       float64
 	Deepspace bool
+
+	// unexported; not directly part of the TLE but can be useful
+	bstarFrac float64 // B* fractional part with decimal point (parsed × 1e-5)
+	bstarExp  int     // B* base 10 exponent
 }
 
 func NewTLE(tle []string) (*TLE, error) {
@@ -118,8 +123,11 @@ func NewTLE(tle []string) (*TLE, error) {
 	tempnum := 1.0e-5 * parseDouble(tle[1][44:50])
 	x.Nddot6 = tempnum / math.Pow(10.0, parseDouble(tle[1][51:52]))
 
-	tempnum = 1.0e-5 * parseDouble(tle[1][53:59])
-	x.Bstar = tempnum / math.Pow(10.0, parseDouble(tle[1][60:61]))
+	bstarFrac := 1.0e-5 * parseDouble(tle[1][53:59])
+	bstarExp := parseInt(tle[1][60:61])
+	x.Bstar = bstarFrac / math.Pow(10.0, float64(bstarExp))
+	x.bstarFrac = bstarFrac
+	x.bstarExp = bstarExp
 	x.Orbitnum = parseInt(strings.TrimSpace(tle[2][63:68]))
 
 	/* reassign the values to these which get used in calculations */
