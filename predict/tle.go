@@ -124,8 +124,8 @@ func NewTLE(tle []string) (*TLE, error) {
 	x.Nddot6 = tempnum / math.Pow(10.0, parseDouble(tle[1][51:52]))
 
 	bstarFrac := 1.0e-5 * parseDouble(tle[1][53:59])
-	bstarExp := parseInt(tle[1][60:61])
-	x.Bstar = bstarFrac / math.Pow(10.0, float64(bstarExp))
+	bstarExp := parseInt(tle[1][59:61])
+	x.Bstar = bstarFrac * math.Pow(10.0, float64(bstarExp))
 	x.bstarFrac = bstarFrac
 	x.bstarExp = bstarExp
 	x.Orbitnum = parseInt(strings.TrimSpace(tle[2][63:68]))
