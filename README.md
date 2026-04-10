@@ -11,3 +11,11 @@ Dr. T.S. Kelso is the author of the SGP4/SDP4 orbital models, originally written
 Neoklis Kyriazis, 5B4AZ, later re-wrote Dr. Kelso's code in C, and released it under the GNU GPL in 2002. PREDICT's core is based on 5B4AZ's code translation efforts.
 
 The Author / Maintainer of this version is: Jens Hertz <jens.hertz@hiber.global>
+
+License
+-------
+This repository is distributed under the GNU General Public License, version 2 or later.
+
+It includes derivative work based on PREDICT by John A. Magliacane (KD2BD), orbital model work by Dr. T.S. Kelso, the GNU GPL C rewrite by Neoklis Kyriazis (5B4AZ), and the earlier predict4java port by David A. B. Johnson (G4DPZ).
+
+See the LICENSE file for the full GPL text and attribution notice.
